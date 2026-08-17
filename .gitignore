@@ -7,6 +7,9 @@ coverage/
 *.db
 .env*
 !.env.example
+neon-export-url.private
+neon-restore-url.private
+emergency-backups/neon-export/
 mysshkey
 mysshkey.pub
 alvexpush_railway_key
@@ -15,3 +18,4 @@ database.txt
 database.txt.txt
 db.close())
 server.txt
+.local-data/

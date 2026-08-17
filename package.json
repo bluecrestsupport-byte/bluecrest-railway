@@ -9,6 +9,7 @@
     "postinstall": "npm --prefix bluecrestback install --omit=dev",
     "build": "vite build --configLoader runner && node scripts/build-server.mjs",
     "start": "node dist/server.cjs",
+    "db:restore:neon": "node scripts/restore-neon-json.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },

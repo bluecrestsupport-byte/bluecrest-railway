@@ -3,10 +3,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const bcrypt = require('bcrypt');
+const { PassThrough } = require('node:stream');
 
 const databasePath = path.join(__dirname, 'financial-flows.test.db');
+const supportUploadPath = path.join(__dirname, 'financial-flows-support-uploads');
 fs.rmSync(databasePath, { force: true });
+fs.rmSync(supportUploadPath, { force: true, recursive: true });
 process.env.SQLITE_DB_PATH = databasePath;
+process.env.SUPPORT_UPLOAD_DIR = supportUploadPath;
 delete process.env.DATABASE_URL;
 
 const initializeDatabase = require('../src/database/init');
@@ -103,6 +107,7 @@ test.after(() => {
     emailService.sendAccountRestrictionEmail = originalAccountRestrictionEmail;
     sqlite.close();
     fs.rmSync(databasePath, { force: true });
+    fs.rmSync(supportUploadPath, { force: true, recursive: true });
 });
 
 test('invalid transfer PIN creates no transfer or ledger entry', async () => {
@@ -487,6 +492,7 @@ test('completed ledger entries reconcile with stored balances', async () => {
 });
 
 test('admin notifications are delivered and can be marked read', async () => {
+    const unreadBefore = await notificationService.getUnreadCount(2);
     const result = await notificationService.sendNotification(
         { id: 1, role: 'ADMIN' },
         {
@@ -502,20 +508,30 @@ test('admin notifications are delivered and can be marked read', async () => {
     const notifications = await notificationService.listForUser(2);
     assert.equal(notifications[0].title, 'Test notification');
     assert.equal(Number(notifications[0].is_read), 0);
+    assert.equal(await notificationService.getUnreadCount(2), unreadBefore + 1);
 
     const marked = await notificationService.markRead(notifications[0].id, 2);
     assert.equal(Number(marked.is_read), 1);
+    assert.equal(await notificationService.getUnreadCount(2), unreadBefore);
 });
 
 test('customer support messages remain in one thread for customer and admin replies', async () => {
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
     await db.query(`INSERT INTO sessions (user_id, token, expires_at) VALUES (3, 'support-customer', ?)`, [expiresAt]);
     await db.query(`INSERT INTO sessions (user_id, token, expires_at) VALUES (1, 'support-admin', ?)`, [expiresAt]);
+    await db.query(`INSERT INTO sessions (user_id, token, expires_at) VALUES (2, 'support-other', ?)`, [expiresAt]);
     const response = () => ({ status: 0, payload: null, writeHead(status) { this.status = status; }, end(body) { this.payload = JSON.parse(body); } });
 
     let res = response();
-    await supportRoutes({ method: 'POST', url: '/api/v1/support/messages', headers: { authorization: 'Bearer support-customer' } }, res, { message: 'I need transfer help.' });
+    await supportRoutes({ method: 'POST', url: '/api/v1/support/messages', headers: { authorization: 'Bearer support-customer' } }, res, {
+        message: 'I need transfer help.',
+        attachment: {
+            name: 'transfer-error.png',
+            data_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        }
+    });
     assert.equal(res.status, 201);
+    assert.equal(fs.readdirSync(supportUploadPath).length, 1);
     const adminNotice = (await notificationService.listForUser(1)).find(item => item.title.includes('Support message from'));
     assert.ok(adminNotice);
     assert.match(adminNotice.action_link, /^\/admin\?support=\d+$/);
@@ -534,6 +550,31 @@ test('customer support messages remain in one thread for customer and admin repl
     await supportRoutes({ method: 'GET', url: '/api/v1/support/conversation', headers: { authorization: 'Bearer support-customer' } }, res, {});
     assert.equal(res.status, 200);
     assert.deepEqual(res.payload.data.messages.map(item => item.sender_role), ['USER', 'ADMIN']);
+    assert.equal(res.payload.data.messages[0].attachments.length, 1);
+    assert.equal(res.payload.data.messages[0].attachments[0].original_name, 'transfer-error.png');
+
+    const attachmentId = res.payload.data.messages[0].attachments[0].id;
+    const attachmentResponse = new PassThrough();
+    const attachmentChunks = [];
+    attachmentResponse.status = 0;
+    attachmentResponse.writeHead = function (status, headers) { this.status = status; this.responseHeaders = headers; };
+    attachmentResponse.on('data', chunk => attachmentChunks.push(chunk));
+    const attachmentFinished = new Promise(resolve => attachmentResponse.on('finish', resolve));
+    await supportRoutes({ method: 'GET', url: `/api/v1/support/attachments/${attachmentId}`, headers: { authorization: 'Bearer support-customer' } }, attachmentResponse, {});
+    await attachmentFinished;
+    assert.equal(attachmentResponse.status, 200);
+    assert.equal(attachmentResponse.responseHeaders['Content-Type'], 'image/png');
+    assert.ok(Buffer.concat(attachmentChunks).length > 8);
+
+    res = response();
+    await supportRoutes({ method: 'GET', url: `/api/v1/support/attachments/${attachmentId}`, headers: { authorization: 'Bearer support-other' } }, res, {});
+    assert.equal(res.status, 403);
+
+    res = response();
+    await supportRoutes({ method: 'POST', url: '/api/v1/support/messages', headers: { authorization: 'Bearer support-customer' } }, res, {
+        attachment: { name: 'fake.png', data_url: 'data:image/png;base64,ZmFrZS1pbWFnZQ==' }
+    });
+    assert.equal(res.status, 400);
     const replyNotice = (await notificationService.listForUser(3)).find(item => item.title === 'New support reply');
     assert.equal(replyNotice.action_link, '/support');
 });

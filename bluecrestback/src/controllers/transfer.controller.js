@@ -81,10 +81,6 @@ async function getAll(req, res) {
 
     try {
 
-        console.log(
-            'FETCHING TRANSFERS'
-        );
-
         const transfers =
             await transferService
                 .fetchTransfers(req.user);

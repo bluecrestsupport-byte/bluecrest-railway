@@ -79,6 +79,7 @@ async function getTransfers() {
         SELECT *
         FROM transfers
         ORDER BY id DESC
+        LIMIT 500
     `);
 }
 
@@ -86,7 +87,8 @@ async function getUserTransfers(userId) {
     return await db.query(
         `SELECT * FROM transfers
          WHERE sender_id = ? OR recipient_user_id = ?
-         ORDER BY id DESC`,
+         ORDER BY id DESC
+         LIMIT 200`,
         [userId, userId]
     );
 }

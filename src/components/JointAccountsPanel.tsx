@@ -43,8 +43,11 @@ export default function JointAccountsPanel({ currentUser, onBalancesChanged }: {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 6000);
-    return () => window.clearInterval(timer);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => document.removeEventListener('visibilitychange', refreshWhenVisible);
   }, [load]);
 
   const run = async (action: () => Promise<any>, success: string) => {

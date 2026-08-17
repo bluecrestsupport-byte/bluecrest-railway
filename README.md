@@ -34,6 +34,26 @@ For Neon, use the rotated Neon connection string as a sealed Railway
 control, build arguments, or support messages. The application initializes its
 schema at runtime and reports `managed-postgres` through `/api/v1/health`.
 
+### Restore the downloaded Neon backup
+
+Validate the rescue archive without connecting to a database:
+
+`npm run db:restore:neon -- --inspect`
+
+To restore it, first deploy or start the application once so its PostgreSQL
+schema exists. Put the target Neon URL in the git-ignored
+`neon-restore-url.private` file:
+
+`TARGET_DATABASE_URL=postgresql://...`
+
+Run `npm run db:restore:neon` for a read-only schema and row-count check. It
+prints the exact `--confirm-target` value required for the write. After checking
+the target, rerun with that confirmation plus `--apply --replace-existing`.
+The restore runs in one transaction, replaces rows in the backed-up tables,
+synchronizes identity sequences, verifies every row count, and rolls back if
+anything fails. Finally, set Railway's sealed `DATABASE_URL` to that same Neon
+URL and keep `NODE_ENV=production` and `DB_PROVIDER=postgres`.
+
 If Railway SQLite is used instead, attach a persistent volume to the web
 service at `/app/data`, then set `NODE_ENV=production`, `DB_PROVIDER=sqlite`,
 and `SQLITE_DB_PATH=/app/data/local.db`. Production startup intentionally fails

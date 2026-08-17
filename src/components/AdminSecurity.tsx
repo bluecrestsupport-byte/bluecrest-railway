@@ -50,14 +50,19 @@ export default function AdminSecurity({ users }: { users: any[] }) {
   };
 
   const saveClearanceFee = async () => {
+    const amount = Number(clearanceFeeAmount);
+    if (clearanceFeeAmount.trim() === '' || !Number.isFinite(amount) || amount < 0) {
+      setMessage('Enter a valid insurance amount of zero or greater.');
+      return;
+    }
     setBusy(true); setMessage('');
     try {
       await apiRequest(`/api/v1/users/${userId}`, {
         method: 'PUT',
-        body: JSON.stringify({ clearance_fee_amount: Number(clearanceFeeAmount || 0) })
+        body: JSON.stringify({ clearance_fee_amount: amount })
       });
-      setSavedClearanceFees(current => ({ ...current, [userId]: String(Number(clearanceFeeAmount || 0)) }));
-      setMessage('The clearance fee was saved. New held transfers will use this amount.');
+      setSavedClearanceFees(current => ({ ...current, [userId]: String(amount) }));
+      setMessage('The insurance amount was saved. New held transfers will use this amount.');
     } catch (error: any) { setMessage(error.message); } finally { setBusy(false); }
   };
 
@@ -72,7 +77,7 @@ export default function AdminSecurity({ users }: { users: any[] }) {
         <p className="text-[10px] text-slate-400">The full code is sent to the selected user's notification center. Stored codes remain hashed.</p>
         <div className="border-t border-slate-100 pt-4 space-y-3">
           <div>
-            <label className="form-label">Clearance fee amount</label>
+            <label className="form-label">Insurance amount</label>
             <input
               type="number"
               min="0"
@@ -83,8 +88,8 @@ export default function AdminSecurity({ users }: { users: any[] }) {
               placeholder="0.00"
             />
           </div>
-          <button disabled={busy || !userId} onClick={saveClearanceFee} className="w-full py-3 rounded-xl bg-slate-900 text-white text-xs font-bold">Save clearance fee</button>
-          <p className="text-[10px] text-slate-400">Set the user's transfer flow to “Insurance Hold” in User Management. New transfers will remain pending and display this fee in transaction history.</p>
+          <button disabled={busy || !userId} onClick={saveClearanceFee} className="w-full py-3 rounded-xl bg-slate-900 text-white text-xs font-bold">Save insurance amount</button>
+          <p className="text-[10px] text-slate-400">Set the user's transfer flow to “Insurance Hold” in User Management. New transfers will remain pending and display this amount in transaction history.</p>
         </div>
       </div>
       <div className="bg-white rounded-[2rem] p-6 border border-slate-100 space-y-4">

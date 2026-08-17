@@ -33,6 +33,7 @@ async function sendNotification(admin, data) {
 module.exports = {
     sendNotification,
     listForUser: notificationRepository.getForUser,
+    getUnreadCount: notificationRepository.getUnreadCount,
     markRead: notificationRepository.markRead,
     markAllRead: notificationRepository.markAllRead
 };

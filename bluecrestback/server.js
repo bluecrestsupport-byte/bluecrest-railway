@@ -52,6 +52,7 @@ const marketRoutes =
     require('./src/routes/market.routes');
 const depositRoutes = require('./src/routes/deposit.routes');
 const supportRoutes = require('./src/routes/support.routes');
+const supportAttachmentStorage = require('./src/services/support-attachment.service');
 const jointAccountRoutes = require('./src/routes/joint-account.routes');
 
 
@@ -78,12 +79,31 @@ const server = http.createServer((req, res) => {
     }
 
     let body = '';
+    let bodyBytes = 0;
+    let bodyTooLarge = false;
+    const requestBodyLimit = req.url === '/api/v1/support/messages'
+        ? 5 * 1024 * 1024
+        : 20 * 1024 * 1024;
 
     req.on('data', chunk => {
+        if (bodyTooLarge) return;
+        bodyBytes += chunk.length;
+        if (bodyBytes > requestBodyLimit) {
+            bodyTooLarge = true;
+            body = '';
+            return errorResponse(
+                res,
+                req.url === '/api/v1/support/messages'
+                    ? 'Support messages and images must be 5 MB or smaller'
+                    : 'Request body is too large',
+                413
+            );
+        }
         body += chunk.toString();
     });
 
     req.on('end', async () => {
+        if (bodyTooLarge) return;
         try {
             try {
                 body = body
@@ -275,6 +295,7 @@ const server = http.createServer((req, res) => {
 // START DATABASE + SERVER
 (async () => {
     await initializeDatabase();
+    await supportAttachmentStorage.ensureUploadDirectory();
 
     server.listen(PORT, () => {
         console.log(`Database provider: ${db.PROVIDER}`);

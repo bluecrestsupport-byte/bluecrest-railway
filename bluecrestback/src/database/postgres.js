@@ -13,7 +13,7 @@ const pool = new Pool({
     enableChannelBinding: true,
     max: Math.max(1, Number(process.env.PG_POOL_MAX || 5)),
     idleTimeoutMillis: Math.max(1000, Number(process.env.PG_IDLE_TIMEOUT_MS || 30000)),
-    connectionTimeoutMillis: Math.max(1000, Number(process.env.PG_CONNECT_TIMEOUT_MS || 15000)),
+    connectionTimeoutMillis: Math.max(1000, Number(process.env.PG_CONNECT_TIMEOUT_MS || 8000)),
     keepAlive: true
 });
 

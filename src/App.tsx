@@ -349,25 +349,47 @@ useEffect(() => {
   }, [currentUser?.email, currentUser?.id, clearStoredSession]);
 
   useEffect(() => {
-    if (isLoggedIn) {
+    if (!isLoggedIn) return;
+
+    let lastRefreshAt = Date.now();
+    syncUserData();
+
+    const refreshAfterReturning = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastRefreshAt < 60_000) return;
+      lastRefreshAt = Date.now();
       syncUserData();
-      const interval = setInterval(() => {
-        syncUserData();
-      }, 8000);
-      return () => clearInterval(interval);
-    }
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterReturning);
+    window.addEventListener('focus', refreshAfterReturning);
+    window.addEventListener('online', refreshAfterReturning);
+
+    return () => {
+      document.removeEventListener('visibilitychange', refreshAfterReturning);
+      window.removeEventListener('focus', refreshAfterReturning);
+      window.removeEventListener('online', refreshAfterReturning);
+    };
   }, [isLoggedIn, syncUserData]);
 
   useEffect(() => {
     if (!isLoggedIn || activeTab === 'notifications') return;
     const token = getAuthToken();
-    const loadUnread = () => fetch('/api/v1/notifications', { headers: { Authorization: `Bearer ${token}` } })
+    const loadUnread = () => {
+      if (document.visibilityState !== 'visible') return Promise.resolve();
+      return fetch('/api/v1/notifications/unread-count', { headers: { Authorization: `Bearer ${token}` } })
       .then(response => response.ok ? response.json() : Promise.reject())
-      .then(payload => setUnreadNotificationCount((payload.data || []).filter((note: any) => !Number(note.is_read)).length))
+      .then(payload => setUnreadNotificationCount(Number(payload.data?.count || 0)))
       .catch(() => undefined);
+    };
     loadUnread();
-    const timer = window.setInterval(loadUnread, 8000);
-    return () => window.clearInterval(timer);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadUnread();
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [isLoggedIn, activeTab]);
 
   const handleViewNotifications = useCallback(async () => {

@@ -28,9 +28,17 @@ async function findById(id) {
 
 async function getForUser(userId) {
     return db.query(
-        `SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC`,
+        `SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 100`,
         [userId]
     );
+}
+
+async function getUnreadCount(userId) {
+    const rows = await db.query(
+        `SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0`,
+        [userId]
+    );
+    return Number(rows[0]?.count || 0);
 }
 
 async function markRead(id, userId) {
@@ -49,4 +57,4 @@ async function markAllRead(userId) {
     await db.query(`UPDATE notifications SET is_read = 1 WHERE user_id = ?`, [userId]);
 }
 
-module.exports = { createNotification, getForUser, markRead, markAllRead };
+module.exports = { createNotification, getForUser, getUnreadCount, markRead, markAllRead };
